@@ -13,7 +13,7 @@ can build from it without guessing.
 | `docs/change-log.md` | One row per changed requirement: the ambiguous wording, what replaced it, which rule drove it. |
 | `docs/decisions.md` | The eight product decisions v0.1 left open, answered, plus every threshold in one table. |
 | `docs/ambiguity-checklist.md` | The twelve rules applied, and the banned-word table. Reusable on the next PRD. |
-| `scripts/check-requirements.sh` | Proves v0.2 follows the mechanical rules. Exit 0 means it does. |
+| `.claude/skills/linting-requirements/` | A Claude Code skill: point it at any requirements document and it returns a findings table with a replacement sentence per row, decisions needed with defaults, and terms to define. `scripts/check-requirements.sh` is a wrapper around its mechanical checker. |
 
 ## How to read it
 
@@ -39,6 +39,21 @@ can build from it without guessing.
 ```bash
 scripts/check-requirements.sh
 ```
+
+## Lint any requirements document
+
+Open this repo in Claude Code and ask it to lint a requirements file; the
+`linting-requirements` skill loads on its own. Or run the mechanical part
+alone:
+
+```bash
+.claude/skills/linting-requirements/check.sh path/to/requirements.md
+```
+
+The skill was built test-first: a fresh agent reviewed v0.1 section 10
+without it (a 1,400-word prose review, ten open questions, no proposed
+wording) and then with it (34 table rows, each with a paste-ready sentence,
+ten decisions each with a default).
 
 ## Next step
 
