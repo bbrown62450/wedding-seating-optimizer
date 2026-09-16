@@ -320,6 +320,117 @@ Verify by: type an instruction naming a guest not in the event; no draft appears
 
 ---
 
+## 10. Automatic Seating Assignment
+
+**FR-043.** When FR-041 passes, the system SHALL produce a proposed assignment of every Eligible guest to a table.
+Verify by: AC-001.
+
+**FR-044.** In the first release the system SHALL NOT assign seats (D-03). A guest at a table with stored seats is shown at the table with no seat until an Owner or Editor places them in a seat by hand (FR-053).
+Verify by: after optimization every guest has a table id and a null seat id.
+
+**FR-045.** The solver SHALL satisfy every enabled Hard constraint. The only way a saved chart violates a Hard constraint is an Exception recorded under FR-054 and FR-056.
+Verify by: AC-001 and AC-003; and a chart with a Hard violation always has a matching Exception record.
+
+**FR-046.** Among assignments that satisfy every Hard constraint, the solver SHALL return one with the highest Score, choosing by Tie-break among equals. Low-disruption mode changes the order of objectives (FR-066).
+Verify by: a two-table fixture with two Soft rules of weights 60 and 50 that cannot both hold; the result satisfies the 60.
+
+**FR-047.** Table capacity SHALL be a Hard constraint in every mode and SHALL NOT be subject to an Exception.
+Verify by: no fixture in any mode produces a table with more guests than its capacity; the Exception dialog (FR-054) is not offered for capacity.
+
+**FR-048.** Two runs with identical Deterministic inputs SHALL produce identical assignments. The system SHALL store the Deterministic inputs' solver version, time limit, and seed with every result (IG-03).
+Verify by: AC-010.
+
+**FR-049.** Every result SHALL contain: (a) the count of Eligible guests assigned; (b) the count of Eligible guests unassigned, with their ids; (c) the Score; (d) every violated Soft constraint with its weight and the guest ids it names; (e) every Exception with the guest ids it names; (f) every Unevaluable rule; (g) the Disruption count and the Seat change count against the last saved chart; (h) the solver version, time limit, seed, and elapsed milliseconds.
+Verify by: a result read over the API has fields (a) to (h) with these names.
+
+**FR-050.** When the solver reports that no assignment satisfies the Hard constraints, the system SHALL keep the last saved chart unchanged and SHALL list a set of Hard constraint ids and lock ids whose removal makes the problem feasible (procedure left to the implementer, section 19 item 9).
+Verify by: AC-002.
+
+**FR-051.** With the FR-050 list, the system SHALL show each of these options that applies, and no others: (a) raise a named table's capacity; (b) unlock a named Locked assignment; (c) change a named Hard constraint to Soft (FR-042); (d) add a table. An option applies when it is part of the listed set (b, c) or when capacity is a listed cause (a, d).
+Verify by: AC-002 shows options (b) and (c) and not (a) or (d).
+
+**FR-052.** A solver run that fails, is cancelled by the Owner or Editor, or reaches the time limit of 60 seconds SHALL leave the last saved chart unchanged and SHALL show which of the three happened.
+Verify by: cancel a run at 2 seconds; the chart equals its pre-run state and the message says Cancelled.
+
+---
+
+## 11. Manual Assignment and Overrides
+
+**FR-053.** An Owner or Editor SHALL be able to: (a) drag a guest from the unassigned list or from a table to a table or to a stored seat; (b) swap two guests' tables or seats; (c) pick a table for a guest from a list.
+Verify by: each of (a) to (c) once; the assignment records match the action.
+
+**FR-054.** When a manual change would violate an enabled Hard constraint, the system SHALL show the rule id, its text, and the affected guest names, and SHALL apply the change only when the Owner or Editor clicks Confirm, recording an Exception (FR-056).
+Verify by: drag a Couple member to a different table from their partner with a Hard SAME_TABLE rule; the dialog names the rule; Cancel leaves the chart unchanged; Confirm applies it and an Exception exists.
+
+**FR-055.** When a manual change would violate an enabled Soft constraint, the system SHALL show the rule id, its text, and its weight, and SHALL apply the change on Confirm with no Exception record.
+Verify by: the same drag with the rule Soft; the dialog shows the weight; Confirm applies; no Exception exists.
+
+**FR-056.** The Confirm dialog in FR-054 SHALL accept an explanation of 0 to 500 characters and store it on the Exception with the caller's id and UTC timestamp.
+Verify by: confirm with a 500-character explanation; the Exception record holds it; 501 characters is rejected with error VALIDATION.
+
+**FR-057.** An Owner or Editor SHALL be able to lock: (a) a guest to a table; (b) a guest to a stored seat, which also locks the table (D-03); (c) every current assignment at a table. Each lock is a stored record with the caller's id and UTC timestamp.
+Verify by: each lock type; the lock records exist; AC-003.
+
+**FR-058.** Recalculation in any mode SHALL NOT change a Locked assignment.
+Verify by: AC-003 in all three modes.
+
+**FR-059.** An Owner or Editor SHALL be able to remove a lock. Removal is recorded (FR-003).
+Verify by: remove a lock; the next Planning run may move the guest.
+
+**FR-060.** The system SHALL provide undo and redo for guest, rule, table, Zone, Focal point, lock, and assignment changes made in the current Editing session, to a depth of at least 50 steps. Applying a solver result counts as one step.
+Verify by: make 50 changes, undo 50 times; the state equals the session start; redo 50 times; it equals the end.
+
+**FR-061.** An Owner or Editor SHALL be able to save the current chart as a named version (name 1 to 80 characters, unique within the event).
+Verify by: save "Draft 1" twice; the second is rejected with error VALIDATION.
+
+**FR-062.** An Owner or Editor SHALL be able to compare two versions, seeing every guest whose table or seat differs, and restore a version, which replaces the current chart and is itself undoable (FR-060).
+Verify by: save, move 3 guests, compare; exactly 3 guests are listed; restore; the chart equals the saved version.
+
+---
+
+## 12. Change-Management Modes
+
+| Mode | Existing assignments | Objectives in order | When to use |
+|---|---|---|---|
+| Planning | Any unlocked guest may move | 1. Score, 2. Tie-break | Before the chart is shared |
+| Low-disruption | At most L guests change table (L set per run) | 1. Disruption count (lower is better), 2. Score, 3. Tie-break | After the chart is shared and before the event |
+| Event-day | Every existing assignment is Locked unless unlocked | Places new guests only; 1. Score, 2. Tie-break over the new guests | On the event day |
+
+**FR-063.** In Planning mode the solver MAY move any guest whose assignment is not Locked, and SHALL return the assignment defined by FR-046.
+Verify by: AC-004.
+
+**FR-064.** In Low-disruption mode the Owner or Editor SHALL set L, an integer from 0 to the count of assigned guests, before the run.
+Verify by: the run button is disabled until L is set; L = -1 is rejected with error VALIDATION.
+
+**FR-065.** In Low-disruption mode the solver SHALL treat "Disruption count <= L" as a Hard constraint.
+Verify by: AC-009.
+
+**FR-066.** In Low-disruption mode the solver SHALL minimize Disruption count first, then maximize Score, then apply Tie-break.
+Verify by: a fixture where moving 2 guests scores 10 more than moving 1; with L = 2 the result moves 1.
+
+**FR-067.** In Event-day mode the system SHALL treat every existing assignment as Locked. An Owner or Editor unlocks a specific assignment (FR-059) to allow it to move.
+Verify by: AC-005.
+
+**FR-068.** In Event-day mode the solver SHALL assign each new Eligible guest to a table with free capacity, satisfying every Hard constraint, maximizing Score over the new guests only, and SHALL NOT move any previously assigned guest.
+Verify by: AC-005.
+
+**FR-069.** When no table satisfies every Hard constraint for a new guest in Event-day mode, the system SHALL leave that guest unassigned and SHALL list alternatives ordered by Disruption count ascending, then total weight of violated Soft constraints ascending, then table id ascending.
+Verify by: AC-006.
+
+**FR-070.** Each Event-day alternative SHALL be one of exactly: (a) add a table; (b) raise a named table's capacity by a stated amount; (c) unlock a named assignment and move that guest to a named table; (d) record an Exception for a named Hard constraint. Each alternative shows the Disruption count and the violated weight it would cause.
+Verify by: AC-006 lists alternatives of these kinds only, each with both numbers.
+
+**FR-071.** Setting a guest to Declined or Cancelled in Event-day mode SHALL free their seat and SHALL NOT move any other guest.
+Verify by: AC-007.
+
+**FR-072.** Before any solver result is applied, the system SHALL show every guest whose table or seat would change, with the old and new values, the Disruption count, and the Seat change count.
+Verify by: AC-004.
+
+**FR-073.** An Owner or Editor SHALL be able to reject the proposed result from the FR-072 comparison; rejecting leaves the saved chart unchanged.
+Verify by: run, then reject; the chart equals its pre-run state.
+
+---
+
 ## 19. Left to the implementer
 
 The agent may choose these and only these without asking:
