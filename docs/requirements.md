@@ -431,6 +431,216 @@ Verify by: run, then reject; the chart equals its pre-run state.
 
 ---
 
+## 13. Seating-Chart Presentation
+
+**FR-074.** The chart view SHALL draw the room, every Focal point, Zone, table, stored seat, assignment, lock, and Rule violation.
+Verify by: a fixture with one of each; each is present in the rendered DOM with a data attribute naming its id.
+
+**FR-075.** The chart SHALL distinguish unassigned guests, assigned guests, Locked assignments, and assignments with violations by an icon and a text label in addition to color.
+Verify by: with CSS colors disabled, the four states are still told apart by icon and label.
+
+**FR-076.** An Owner, Editor, or Viewer SHALL be able to search guests by display name substring (case-insensitive) and select a result, which scrolls the chart to that guest's table and outlines the table and seat.
+Verify by: search "may"; selecting "Aunt May" outlines Table 4.
+
+**FR-077.** The guest list SHALL filter by RSVP status, Party, group, priority category, assignment status (assigned or unassigned), and violation status (has violation or none). Filters combine with AND.
+Verify by: Confirmed plus unassigned shows only guests matching both.
+
+**FR-078.** Selecting a guest SHALL show: assignment, every rule naming the guest with its status (satisfied, violated, Unevaluable, disabled), locks, Exceptions, and, for Owner and Editor only, private notes (D-04).
+Verify by: select a guest as Editor; notes are shown; as Viewer; notes are absent from the response.
+
+**FR-079.** Selecting a table SHALL show: capacity, assigned guest count, free capacity, the assigned guests, locks at the table, and every Rule violation naming a guest at the table.
+Verify by: a table of capacity 10 with 7 guests shows 10, 7, 3.
+
+---
+
+## 14. Export and Printing
+
+**FR-080.** The system SHALL export the room chart as a PDF (PDF 1.7, one page per 30 tables, Letter and A4 selectable) showing tables with labels and guest names.
+Verify by: export a 35-table event; the PDF has 2 pages.
+
+**FR-081.** The system SHALL export a guest-to-table list sorted by display name (case-insensitive) as PDF and as UTF-8 CSV with header `display_name,party,table_label,seat_ordinal`.
+Verify by: the CSV header matches exactly; rows are in sorted order.
+
+**FR-082.** The system SHALL export a table-by-table list (tables in label order, guests in display-name order within each) as PDF and as UTF-8 CSV with header `table_label,display_name,party,seat_ordinal`.
+Verify by: the CSV header matches exactly.
+
+**FR-083.** The system SHALL export table cards as a PDF, one card per table, showing the table label and the assigned guests' display names.
+Verify by: a 12-table event yields a PDF with 12 cards.
+
+**FR-084.** Private notes, rule records, Exceptions, and Exception explanations SHALL be absent from every export unless FR-085 is used.
+Verify by: AC-008.
+
+**FR-085.** An Owner or Editor MAY include private notes in FR-081 and FR-082 exports by checking a box labeled "Include private notes". The system SHALL then show the exact field names to be included and require Confirm before generating the file, and SHALL write an audit record (NFR-008).
+Verify by: check the box; the dialog names "notes"; Confirm produces a file containing notes and an audit row exists.
+
+---
+
+## 15. Nonfunctional Requirements
+
+**NFR-001.** Optimization performance. In the Benchmark environment (`docs/decisions.md`), Planning-mode optimization of the benchmark dataset (250 guests, 30 tables, 2,000 active rules) SHALL finish within 15 seconds, measured from the request to the result being stored.
+Verify by: run the benchmark 5 times; every run is under 15 seconds.
+
+**NFR-002.** Interactive performance. In the Benchmark environment, for every action other than optimization, import, and export, the 95th percentile of time to Visible feedback SHALL be at most 500 milliseconds.
+Verify by: a scripted session of 200 actions measured with the Performance API; p95 <= 500 ms.
+
+**NFR-003.** Autosave. The system SHALL persist each accepted change within 5 seconds of the last change when the client is online.
+Verify by: change a guest, wait 5 seconds, reload; the change is present.
+
+**NFR-004.** Recovery. When a save fails, the client SHALL keep the change in browser storage, show "Not saved" with the count of pending changes, and retry every 10 seconds until the save succeeds.
+Verify by: go offline, change a guest, go online; within 10 seconds the change is saved and the indicator clears.
+
+**NFR-005.** Transport security. Every client-server connection SHALL use TLS 1.2 or later.
+Verify by: a TLS 1.1 connection attempt is refused.
+
+**NFR-006.** Stored-data security. Guest, relationship, rule, assignment, and private-note data SHALL be encrypted at rest with AES-256 or stronger.
+Verify by: the storage configuration shows encryption enabled; a raw storage read shows ciphertext.
+
+**NFR-007.** Authorization. Event data SHALL be readable only by the event's Owner, Editors, and Viewers (FR-002).
+Verify by: a signed-in user with no role on the event receives 403.
+
+**NFR-008.** Auditability. The system SHALL keep an append-only audit record of: imports, rule changes, manual assignment changes, locks and unlocks, solver runs and their acceptance or rejection, Exceptions, exports that include private notes, version saves and restores, role grants and revokes, and event deletion. Each entry has the caller's id, the UTC timestamp, the object ids, and the action.
+Verify by: perform each action once; the audit log has one entry per action with those fields.
+
+**NFR-009.** Deletion. The Owner SHALL be able to delete an event after typing the event name in a confirmation dialog. Deletion removes the event and its guests, rules, assignments, versions, and audit records from live storage at once and from every backup within 30 days (D-06).
+Verify by: delete; every API read of the event returns 404; the backup purge job log shows the event purged within 30 days.
+
+**NFR-010.** Accessibility. The web interface SHALL conform to WCAG 2.2 Level AA.
+Verify by: an axe-core scan of every screen reports zero violations at level AA, and keyboard-only use completes AC-001, AC-005, and AC-008.
+
+**NFR-011.** Mobile operation. Every screen used in Event-day mode SHALL work at 360 CSS pixels wide with no horizontal page scroll; the chart canvas itself may pan.
+Verify by: at 360 px, AC-005 and AC-007 complete and document.scrollWidth equals the viewport width.
+
+**NFR-012.** Availability. The production service SHALL be available 99.9% of each calendar month, excluding maintenance announced at least 48 hours ahead.
+Verify by: the monthly uptime report.
+
+**NFR-013.** Data integrity. Every write SHALL leave storage in either the previous committed state or the new committed state. No reader SHALL see a partly written chart.
+Verify by: kill the server mid-write in a test; the chart read afterwards equals the previous or the new state.
+
+**NFR-014.** Browser support. The application SHALL work in the current and the previous major release of Chrome, Edge, Firefox, and Safari as of each production release.
+Verify by: AC-001 and AC-005 pass in all eight browser versions.
+
+**NFR-015.** Limits. The server SHALL enforce the per-event and per-owner limits in `docs/decisions.md` (D-05) with error LIMIT_EXCEEDED and no change.
+Verify by: the 501st guest, 61st table, 4,001st active rule, 21st collaborator, and 51st event are each rejected.
+
+---
+
+## 16. Acceptance Scenarios
+
+Every scenario is a test the agent writes (R7). Fixtures are named so they can be shared.
+
+### AC-001: Generate an initial chart
+**Given** fixture `f-100`: 100 Confirmed guests, 12 tables of capacity 10, the FR-028 template, and no locks
+**When** an Editor runs Planning-mode optimization and accepts the result
+**Then** all 100 guests have a table, no table exceeds 10, every enabled Hard constraint is satisfied, and the result shows the Score and every violated Soft constraint.
+
+### AC-002: Detect an impossible couple assignment
+**Given** guests A and B with a Hard SAME_TABLE rule, A locked to Table 1, B locked to Table 2
+**When** an Editor runs Planning-mode optimization
+**Then** the saved chart is unchanged, the FR-050 list contains the SAME_TABLE rule id and both lock ids, and the FR-051 options offered are unlock (b) and change to Soft (c) only.
+
+### AC-003: Respect a manual lock
+**Given** guest C locked to Table 4
+**When** an Editor runs optimization in Planning, then Low-disruption (L = 50), then Event-day mode
+**Then** C is at Table 4 after each run.
+
+### AC-004: Add a guest during planning
+**Given** an accepted chart from AC-001 and one newly Confirmed guest D
+**When** an Editor runs Planning-mode optimization
+**Then** the FR-072 comparison lists every guest whose table would change with old and new values, and nothing is applied until the Editor accepts.
+
+### AC-005: Add a guest on the event day
+**Given** an accepted chart, Event-day mode, and Table 6 with one free seat that satisfies every Hard constraint for new guest E
+**When** E is added as Confirmed
+**Then** E is at Table 6 and every other guest's table is unchanged.
+
+### AC-006: No valid event-day seat
+**Given** an accepted chart, Event-day mode, and no table with free capacity that satisfies every Hard constraint for new guest F
+**When** F is added as Confirmed
+**Then** F is unassigned, the alternatives listed are of the FR-070 kinds only, ordered per FR-069, and no existing assignment changes.
+
+### AC-007: Remove an event-day guest
+**Given** guest G seated at Table 2 in Event-day mode
+**When** G is set to Cancelled
+**Then** Table 2 has one more free seat and no other guest's table or seat changed.
+
+### AC-008: Protect private notes
+**Given** guests with private notes, rules, and one Exception with an explanation
+**When** an Editor generates the FR-081 PDF and CSV without checking "Include private notes"
+**Then** neither file contains any note text, rule text, or explanation text.
+
+### AC-009: Low-disruption limit holds
+**Given** an accepted chart of 100 guests and 20 new Soft rules that would each be satisfied by moving one distinct guest
+**When** an Editor runs Low-disruption mode with L = 5
+**Then** the Disruption count of the result is at most 5.
+
+### AC-010: Determinism
+**Given** fixture `f-100` and a fixed seed
+**When** Planning-mode optimization runs 3 times with identical Deterministic inputs
+**Then** the three assignment lists are byte-identical.
+
+### AC-011: Import preview counts
+**Given** an event with guest "Ann Lee" and a CSV of 4 rows: "ann  lee" (duplicate), a row with rsvp_status "Maybe" (invalid), and 2 valid new rows
+**When** an Editor previews the import
+**Then** the preview shows 1 Invalid row, 1 Likely duplicate, 2 to create, 0 to update, and cancelling leaves the guest count at 1.
+
+### AC-012: Concurrent save conflict
+**Given** two Editors have loaded guest H
+**When** the first saves a new meal choice and the second then saves a different meal choice
+**Then** the second save is rejected with STALE_OBJECT, the second Editor sees the first's value, and choosing Overwrite saves the second value.
+
+### AC-013: Assistant drafts are not rules
+**Given** guests "Aunt May" and "Uncle Bob"
+**When** an Editor types "Aunt May must not sit with Uncle Bob" and does not click Approve
+**Then** the rule list is unchanged, the next optimization result does not mention the draft, and after Approve the rule exists with origin "assistant" and type DIFFERENT_TABLE.
+
+### AC-014: Manual capacity rejection
+**Given** Table 1 with capacity 8 and 8 guests
+**When** an Editor drags a ninth guest onto Table 1
+**Then** the drop is rejected with CAPACITY_EXCEEDED and no dialog offers an Exception.
+
+### AC-015: Minimum distance rule
+**Given** tables at (0,0) and (3000,4000), guests J and K, and a Hard MIN_DISTANCE rule of 5,000 between them
+**When** Planning-mode optimization runs
+**Then** J and K are at different tables; with the rule at 5,001 the FR-050 conflict lists it.
+
+---
+
+## 17. Implementation Guardrails
+
+Each guardrail is a requirement with an id.
+
+**IG-01.** Every rule SHALL be a stored record with the FR-033 fields. No rule logic lives in prompt text.
+Verify by: FR-033.
+
+**IG-02.** Assignments SHALL come from a deterministic constraint solver. The reference is OR-Tools CP-SAT with a fixed seed and one worker thread; another solver is allowed under section 19 item 4 if FR-048 holds.
+Verify by: AC-010.
+
+**IG-03.** Every result SHALL store the solver version, time limit, and seed (FR-049h).
+Verify by: FR-049.
+
+**IG-04.** Rule evaluation SHALL be a module with no dependency on the UI layer, callable from tests with a chart and a rule list.
+Verify by: the FR-034 test calls the evaluator directly with no browser.
+
+**IG-05.** Locks and Exceptions SHALL be stored records (FR-056, FR-057), never client-only state.
+Verify by: reload the page; every lock and Exception is still present.
+
+**IG-06.** An Unevaluable rule SHALL never be reported as satisfied (FR-012).
+Verify by: FR-012.
+
+**IG-07.** A solver result SHALL be a proposal until an Owner or Editor accepts it in the FR-072 comparison.
+Verify by: FR-073.
+
+**IG-08.** An assistant draft SHALL be a draft until approved (FR-088).
+Verify by: AC-013.
+
+---
+
+## 18. Decisions applied
+
+Section 18 of v0.1 listed eight open decisions. All eight are decided in `docs/decisions.md` (D-01 to D-08) and cited where they apply. No open product decisions remain in this document. New questions go through R2.
+
+---
+
 ## 19. Left to the implementer
 
 The agent may choose these and only these without asking:
